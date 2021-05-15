@@ -6,6 +6,7 @@ package template
 
 import (
 	"bytes"
+	gotemplate "html/template"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -18,35 +19,64 @@ import (
 )
 
 func TestTemplate_HTML(t *testing.T) {
-	f := flamego.NewWithLogger(&bytes.Buffer{})
-	f.Use(Templater(
-		Options{
-			Directory: "testdata/basic",
-		},
-	))
-	f.Get("/", func(t Template, data Data) {
-		data["Name"] = "Flamego"
-		t.HTML(http.StatusOK, "home")
-	})
-
-	resp := httptest.NewRecorder()
-	req, err := http.NewRequest(http.MethodGet, "/", nil)
-	assert.Nil(t, err)
-
-	f.ServeHTTP(resp, req)
-
-	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.Equal(t, "text/html; charset=utf-8", resp.Header().Get("Content-Type"))
-
-	want := `
+	tests := []struct {
+		name string
+		opts Options
+		want string
+	}{
+		{
+			name: "basic",
+			opts: Options{
+				Directory: "testdata/basic",
+				FuncMaps: []gotemplate.FuncMap{
+					{"Year": func() int { return 2021 }},
+				},
+			},
+			want: `
 <header>This is a header</header>
 <p>
   Hello, Flamego!
 </p>
-`
-
-	if runtime.GOOS == "windows" {
-		want = strings.ReplaceAll(want, "\n", "\r\n")
+<footer>2021</footer>
+`,
+		},
+		{
+			name: "overwrite",
+			opts: Options{
+				Directory:         "testdata/overwrite/primary",
+				AppendDirectories: []string{"testdata/overwrite/append"},
+			},
+			want: `
+<header>The header is overwritten</header>
+<p>
+  Hello, Flamego!
+</p>
+`,
+		},
 	}
-	assert.Equal(t, want, resp.Body.String())
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			f := flamego.NewWithLogger(&bytes.Buffer{})
+			f.Use(Templater(test.opts))
+			f.Get("/", func(t Template, data Data) {
+				data["Name"] = "Flamego"
+				t.HTML(http.StatusOK, "home")
+			})
+
+			resp := httptest.NewRecorder()
+			req, err := http.NewRequest(http.MethodGet, "/", nil)
+			assert.Nil(t, err)
+
+			f.ServeHTTP(resp, req)
+
+			assert.Equal(t, http.StatusOK, resp.Code)
+			assert.Equal(t, "text/html; charset=utf-8", resp.Header().Get("Content-Type"))
+
+			want := test.want
+			if runtime.GOOS == "windows" {
+				want = strings.ReplaceAll(want, "\n", "\r\n")
+			}
+			assert.Equal(t, want, resp.Body.String())
+		})
+	}
 }
