@@ -70,6 +70,14 @@ func isFile(path string) bool {
 	return !f.IsDir()
 }
 
+func getExt(name string) string {
+	i := strings.Index(name, ".")
+	if i == -1 {
+		return ""
+	}
+	return name[i:]
+}
+
 func newFileSystem(primaryDir string, appendDirs, allowedExtensions []string) (FileSystem, error) {
 	// Directories are composed in the reverse order because later ones overwrites
 	// previous ones. Therefore, we can simply break of the loop once found an
@@ -105,14 +113,7 @@ func newFileSystem(primaryDir string, appendDirs, allowedExtensions []string) (F
 			return errors.Wrap(err, "get relative path")
 		}
 
-		ext := func(name string) string {
-			i := strings.Index(name, ".")
-			if i == -1 {
-				return ""
-			}
-			return name[i:]
-		}(relpath)
-
+		ext := getExt(relpath)
 		for _, allowed := range allowedExtensions {
 			if ext != allowed {
 				continue
@@ -150,6 +151,50 @@ func newFileSystem(primaryDir string, appendDirs, allowedExtensions []string) (F
 	if err != nil {
 		return nil, errors.Wrapf(err, "walk %q", primaryDir)
 	}
+	return &fileSystem{
+		files: files,
+	}, nil
+}
+
+func EmbedFS(efs embed.FS, allowedExtensions []string) (FileSystem, error) {
+	var files []File
+	err := fs.WalkDir(efs, ".", func(path string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relpath, err := filepath.Rel(".", path)
+		if err != nil {
+			return errors.Wrap(err, "get relative path")
+		}
+
+		ext := getExt(relpath)
+		for _, allowed := range allowedExtensions {
+			if ext != allowed {
+				continue
+			}
+
+			data, err := efs.ReadFile(path)
+			if err != nil {
+				return errors.Wrap(err, "read")
+			}
+
+			name := filepath.ToSlash(relpath[:len(relpath)-len(ext)])
+			files = append(files,
+				&file{
+					name: name,
+					data: data,
+					ext:  ext,
+				},
+			)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "walk")
+	}
+
 	return &fileSystem{
 		files: files,
 	}, nil
