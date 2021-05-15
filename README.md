@@ -6,3 +6,43 @@
 [![Sourcegraph](https://img.shields.io/badge/view%20on-Sourcegraph-brightgreen.svg?style=for-the-badge&logo=sourcegraph)](https://sourcegraph.com/github.com/flamego/template)
 
 Package template is a middleware that provides Go template rendering for [Flamego](https://github.com/flamego/flamego).
+
+## Installation
+
+The minimum requirement of Go is **1.16**.
+
+	go get github.com/flamego/template
+
+## Getting started
+
+```html
+<!-- templates/home.tmpl -->
+<p>
+  Hello, <b>{{.Name}}</b>!
+</p>
+```
+
+```go
+package main
+
+import (
+	"http"
+
+	"github.com/flamego/flamego"
+	"github.com/flamego/template"
+)
+
+func main() {
+	f := flamego.Classic()
+	f.Use(template.Templater())
+	f.Get("/", func(t template.Template, data template.Data) {
+		data["Name"] = "Joe"
+		t.HTML(http.StatusOK, "home")
+	})
+	f.Run()
+}
+```
+
+## License
+
+This project is under the MIT License. See the [LICENSE](LICENSE) file for the full license text.
