@@ -52,12 +52,15 @@ func (t *template) HTML(status int, name string) {
 	}()
 
 	started := time.Now()
+	t.Data["RenderDuration"] = func() string {
+		return fmt.Sprint(time.Since(started).Nanoseconds()/1e6) + "ms"
+	}
+
 	err := t.ExecuteTemplate(buf, name, t.Data)
 	if err != nil {
 		responseServerError(t.ResponseWriter, err)
 		return
 	}
-	t.Data["RenderDuration"] = fmt.Sprint(time.Since(started).Nanoseconds()/1e6) + "ms"
 
 	t.ResponseWriter.Header().Set("Content-Type", t.contentType+"; charset=utf-8")
 	t.ResponseWriter.WriteHeader(status)
@@ -98,6 +101,10 @@ type Options struct {
 }
 
 func newTemplate(opts Options) (*gotemplate.Template, error) {
+	if opts.Directory == "" {
+		opts.Directory = "templates"
+	}
+
 	if opts.FileSystem == nil {
 		var err error
 		opts.FileSystem, err = newFileSystem(opts.Directory, opts.AppendDirectories, opts.Extensions)
@@ -147,14 +154,14 @@ func Templater(opts ...Options) flamego.Handler {
 
 	tpl, err := newTemplate(opt)
 	if err != nil {
-		panic("template: new template: " + err.Error())
+		panic("template: " + err.Error())
 	}
 
 	bufPool := &sync.Pool{
 		New: func() interface{} { return new(bytes.Buffer) },
 	}
 
-	return func(c flamego.Context, log *log.Logger) {
+	return flamego.LoggerInvoker(func(c flamego.Context, log *log.Logger) {
 		t := &template{
 			ResponseWriter: c.ResponseWriter(),
 			Logger:         log,
@@ -169,7 +176,7 @@ func Templater(opts ...Options) flamego.Handler {
 			if err != nil {
 				http.Error(
 					c.ResponseWriter(),
-					fmt.Sprintf("template: new template: %v", err),
+					fmt.Sprintf("template: %v", err),
 					http.StatusInternalServerError,
 				)
 				return
@@ -179,5 +186,5 @@ func Templater(opts ...Options) flamego.Handler {
 
 		c.MapTo(t, (*Template)(nil))
 		c.Map(t.Data)
-	}
+	})
 }

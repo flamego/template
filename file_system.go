@@ -156,14 +156,17 @@ func newFileSystem(primaryDir string, appendDirs, allowedExtensions []string) (F
 	}, nil
 }
 
-func EmbedFS(efs embed.FS, allowedExtensions []string) (FileSystem, error) {
+func EmbedFS(efs embed.FS, dir string, allowedExtensions []string) (FileSystem, error) {
 	var files []File
-	err := fs.WalkDir(efs, ".", func(path string, _ fs.DirEntry, err error) error {
+	err := fs.WalkDir(efs, dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
+		if d.IsDir() {
+			return nil
+		}
 
-		relpath, err := filepath.Rel(".", path)
+		relpath, err := filepath.Rel(dir, path)
 		if err != nil {
 			return errors.Wrap(err, "get relative path")
 		}
