@@ -14,14 +14,21 @@ import (
 	"github.com/pkg/errors"
 )
 
+// File is a template file that contains name, data and its extension.
 type File interface {
+	// Name returns the name of the file, stripping its extension. It should return
+	// "home" not "home.tmpl".
 	Name() string
+	// Data returns the file content.
 	Data() ([]byte, error)
+	// Ext returns the file extension, carrying the dot ("."). It should return
+	// ".tmpl" not "tmpl".
 	Ext() string
 }
 
-// todo
+// FileSystem is a template file system consists a list of template files.
 type FileSystem interface {
+	// Files returns the the list of template files.
 	Files() []File
 }
 
@@ -31,25 +38,15 @@ type file struct {
 	ext  string
 }
 
-func (f *file) Name() string {
-	return f.name
-}
-
-func (f *file) Data() ([]byte, error) {
-	return f.data, nil
-}
-
-func (f *file) Ext() string {
-	return f.ext
-}
+func (f *file) Name() string          { return f.name }
+func (f *file) Data() ([]byte, error) { return f.data, nil }
+func (f *file) Ext() string           { return f.ext }
 
 type fileSystem struct {
 	files []File
 }
 
-func (fs *fileSystem) Files() []File {
-	return fs.files
-}
+func (fs *fileSystem) Files() []File { return fs.files }
 
 // isDir returns true if given path is a directory, and returns false when it's
 // a file or does not exist.
@@ -70,6 +67,7 @@ func isFile(path string) bool {
 	return !f.IsDir()
 }
 
+// getExt returns the extension of given name, prefixed with the dot (".").
 func getExt(name string) string {
 	i := strings.Index(name, ".")
 	if i == -1 {
@@ -78,6 +76,7 @@ func getExt(name string) string {
 	return name[i:]
 }
 
+// newFileSystem constructs and returns a FileSystem from local disk.
 func newFileSystem(primaryDir string, appendDirs, allowedExtensions []string) (FileSystem, error) {
 	// Directories are composed in the reverse order because later ones overwrites
 	// previous ones. Therefore, we can simply break of the loop once found an
@@ -156,6 +155,7 @@ func newFileSystem(primaryDir string, appendDirs, allowedExtensions []string) (F
 	}, nil
 }
 
+// EmbedFS wraps the given embed.FS into a FileSystem.
 func EmbedFS(efs embed.FS, dir string, allowedExtensions []string) (FileSystem, error) {
 	var files []File
 	err := fs.WalkDir(efs, dir, func(path string, d fs.DirEntry, err error) error {

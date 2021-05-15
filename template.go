@@ -18,13 +18,14 @@ import (
 	"github.com/flamego/flamego"
 )
 
+// Template is a Go template rendering engine.
 type Template interface {
+	// HTML renders the named template with the given status.
 	HTML(status int, name string)
 }
 
 var _ Template = (*template)(nil)
 
-// todo
 type template struct {
 	responseWriter flamego.ResponseWriter
 	logger         *log.Logger
@@ -72,31 +73,38 @@ func (t *template) HTML(status int, name string) {
 	}
 }
 
-// todo
+// Data is used as the root object for rendering a template.
 type Data map[string]interface{}
 
-// todo: Delims represents a set of Left and Right delimiters for HTML template rendering
+// Delims is a pair of Left and Right delimiters for rendering HTML templates.
 type Delims struct {
-	// Left delimiter, defaults to {{
+	// Left is the left delimiter. Default is "{{".
 	Left string
-	// Right delimiter, defaults to }}
+	// Right is the right delimiter. Default is "}}".
 	Right string
 }
 
+// Options contains options for the template.Templater middleware.
 type Options struct {
-	// todo: Directory to load templates. Default is "templates".
+	// Directory is the primary directory to load templates. This value is ignored
+	// when FileSystem is set. Default is "templates".
 	Directory string
-	// todo: Additional directories to overwrite templates.
+	// AppendDirectories is a list of additional directories to load templates for
+	// overwriting templates that are loaded from Directory. This value is ignored
+	// when FileSystem is set.
 	AppendDirectories []string
-	// todo
+	// FileSystem is the interface for supporting any implementation of the
+	// FileSystem.
 	FileSystem FileSystem
-	// todo: Extensions to parse template files from. Defaults are [".tmpl", ".html"].
+	// Extensions is a list of extensions to be used for template files. Default is
+	// `[".tmpl", ".html"]`.
 	Extensions []string
-	// todo: FuncMaps is a slice of `template.FuncMap` to apply to the template upon compilation. This is useful for helper functions. Default is [].
+	// FuncMaps is a list of `template.FuncMap` to be applied for rendering
+	// templates.
 	FuncMaps []gotemplate.FuncMap
-	// todo: Delims sets the action delimiters to the specified strings in the Delims struct.
+	// Delims is the pair of left and right delimiters for rendering templates.
 	Delims Delims
-	// todo: Allows changing of output to XHTML instead of HTML. Default is "text/html"
+	// ContentType specifies the value of "Content-Type". Default is "text/html".
 	ContentType string
 }
 
@@ -132,7 +140,12 @@ func newTemplate(opts Options) (*gotemplate.Template, error) {
 	return tpl, nil
 }
 
-// todo
+// Templater returns a middleware handler that injects template.Templater and
+// template.Data into the request context, which are used for rendering
+// templates to the ResponseWriter.
+//
+// When running with flamego.EnvTypeDev and no FileSystem is specified,
+// templates will be recompiled upon every request.
 func Templater(opts ...Options) flamego.Handler {
 	var opt Options
 	if len(opts) > 0 {
@@ -171,7 +184,7 @@ func Templater(opts ...Options) flamego.Handler {
 			bufPool:        bufPool,
 		}
 
-		if flamego.Env() == flamego.EnvTypeDev {
+		if flamego.Env() == flamego.EnvTypeDev && opt.FileSystem == nil {
 			tpl, err := newTemplate(opt)
 			if err != nil {
 				http.Error(
