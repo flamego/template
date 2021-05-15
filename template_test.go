@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,5 +44,9 @@ func TestTemplate_HTML(t *testing.T) {
   Hello, Flamego!
 </p>
 `
+
+	if runtime.GOOS == "windows" {
+		want = strings.ReplaceAll(want, "\n", "\r\n")
+	}
 	assert.Equal(t, want, resp.Body.String())
 }
