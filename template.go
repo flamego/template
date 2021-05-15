@@ -26,8 +26,8 @@ var _ Template = (*template)(nil)
 
 // todo
 type template struct {
-	flamego.ResponseWriter
-	*log.Logger
+	responseWriter flamego.ResponseWriter
+	logger         *log.Logger
 
 	*gotemplate.Template
 	Data
@@ -58,16 +58,16 @@ func (t *template) HTML(status int, name string) {
 
 	err := t.ExecuteTemplate(buf, name, t.Data)
 	if err != nil {
-		responseServerError(t.ResponseWriter, err)
+		responseServerError(t.responseWriter, err)
 		return
 	}
 
-	t.ResponseWriter.Header().Set("Content-Type", t.contentType+"; charset=utf-8")
-	t.ResponseWriter.WriteHeader(status)
+	t.responseWriter.Header().Set("Content-Type", t.contentType+"; charset=utf-8")
+	t.responseWriter.WriteHeader(status)
 
-	_, err = buf.WriteTo(t.ResponseWriter)
+	_, err = buf.WriteTo(t.responseWriter)
 	if err != nil {
-		t.Logger.Printf("template: failed to write out rendered HTML: %v", err)
+		t.logger.Printf("template: failed to write out rendered HTML: %v", err)
 		return
 	}
 }
@@ -163,8 +163,8 @@ func Templater(opts ...Options) flamego.Handler {
 
 	return flamego.LoggerInvoker(func(c flamego.Context, log *log.Logger) {
 		t := &template{
-			ResponseWriter: c.ResponseWriter(),
-			Logger:         log,
+			responseWriter: c.ResponseWriter(),
+			logger:         log,
 			Template:       tpl,
 			Data:           make(Data),
 			contentType:    opt.ContentType,
