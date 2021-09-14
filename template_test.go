@@ -6,6 +6,7 @@ package template
 
 import (
 	"bytes"
+	"embed"
 	gotemplate "html/template"
 	"net/http"
 	"net/http/httptest"
@@ -14,11 +15,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/flamego/flamego"
 )
 
+//go:embed testdata/overwrite/primary/*.tmpl
+var primaryTemplates embed.FS
+
 func TestTemplate_HTML(t *testing.T) {
+	embedFS, err := EmbedFS(primaryTemplates, "testdata/overwrite/primary", []string{".tmpl"})
+	require.Nil(t, err)
+
 	tests := []struct {
 		name string
 		opts Options
@@ -53,6 +61,19 @@ func TestTemplate_HTML(t *testing.T) {
 </p>
 `,
 		},
+		{
+			name: "overwrite with FileSystem",
+			opts: Options{
+				FileSystem:        embedFS,
+				AppendDirectories: []string{"testdata/overwrite/append"},
+			},
+			want: `
+<header>The header is overwritten</header>
+<p>
+  Hello, Flamego!
+</p>
+`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -65,7 +86,7 @@ func TestTemplate_HTML(t *testing.T) {
 
 			resp := httptest.NewRecorder()
 			req, err := http.NewRequest(http.MethodGet, "/", nil)
-			assert.Nil(t, err)
+			require.Nil(t, err)
 
 			f.ServeHTTP(resp, req)
 
@@ -76,7 +97,7 @@ func TestTemplate_HTML(t *testing.T) {
 			if runtime.GOOS == "windows" {
 				want = strings.ReplaceAll(want, "\n", "\r\n")
 			}
-			assert.Equal(t, want, resp.Body.String())
+			require.Equal(t, want, resp.Body.String())
 		})
 	}
 }
