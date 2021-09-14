@@ -15,16 +15,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/flamego/flamego"
 )
 
 //go:embed testdata/basic/*
-var templates embed.FS
+var basicTemplates embed.FS
 
 func TestEmbedFS(t *testing.T) {
-	fs, err := EmbedFS(templates, "testdata/basic", []string{".tmpl"})
-	assert.Nil(t, err)
+	fs, err := EmbedFS(basicTemplates, "testdata/basic", []string{".tmpl"})
+	require.Nil(t, err)
 
 	f := flamego.NewWithLogger(&bytes.Buffer{})
 	f.Use(Templater(
@@ -42,7 +43,7 @@ func TestEmbedFS(t *testing.T) {
 
 	resp := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodGet, "/", nil)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	f.ServeHTTP(resp, req)
 
@@ -59,5 +60,5 @@ func TestEmbedFS(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		want = strings.ReplaceAll(want, "\n", "\r\n")
 	}
-	assert.Equal(t, want, resp.Body.String())
+	require.Equal(t, want, resp.Body.String())
 }

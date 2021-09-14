@@ -10,6 +10,8 @@ import (
 	gotemplate "html/template"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -86,16 +88,15 @@ type Delims struct {
 
 // Options contains options for the template.Templater middleware.
 type Options struct {
+	// FileSystem is the interface for supporting any implementation of the
+	// FileSystem.
+	FileSystem FileSystem
 	// Directory is the primary directory to load templates. This value is ignored
 	// when FileSystem is set. Default is "templates".
 	Directory string
 	// AppendDirectories is a list of additional directories to load templates for
-	// overwriting templates that are loaded from Directory. This value is ignored
-	// when FileSystem is set.
+	// overwriting templates that are loaded from FileSystem or Directory.
 	AppendDirectories []string
-	// FileSystem is the interface for supporting any implementation of the
-	// FileSystem.
-	FileSystem FileSystem
 	// Extensions is a list of extensions to be used for template files. Default is
 	// `[".tmpl", ".html"]`.
 	Extensions []string
@@ -108,30 +109,66 @@ type Options struct {
 	ContentType string
 }
 
-func newTemplate(opts Options) (*gotemplate.Template, error) {
-	if opts.Directory == "" {
-		opts.Directory = "templates"
-	}
-
-	if opts.FileSystem == nil {
+func newTemplate(allowedExtensions []string, funcMaps []gotemplate.FuncMap, delmis Delims, fs FileSystem, dir string, others ...string) (*gotemplate.Template, error) {
+	if fs == nil {
 		var err error
-		opts.FileSystem, err = newFileSystem(opts.Directory, opts.AppendDirectories, opts.Extensions)
+		fs, err = newFileSystem(dir, allowedExtensions)
 		if err != nil {
 			return nil, errors.Wrapf(err, "new file system")
 		}
 	}
 
-	tpl := gotemplate.New("Flamego.Template").Delims(opts.Delims.Left, opts.Delims.Right)
-	for _, f := range opts.FileSystem.Files() {
+	// Directories are composed in the reverse order because later ones overwrites
+	// previous ones. Therefore, we can simply break of the loop once found an
+	// overwritten when looping in the reverse order.
+	dirs := make([]string, 0, len(others))
+	for i := len(others) - 1; i >= 0; i-- {
+		dirs = append(dirs, others[i])
+	}
+
+	for i := range dirs {
+		if !isDir(dirs[i]) {
+			continue
+		}
+
+		var err error
+		dirs[i], err = filepath.EvalSymlinks(dirs[i])
+		if err != nil {
+			return nil, errors.Wrapf(err, "eval symlinks for %q", dirs[i])
+		}
+	}
+
+	tpl := gotemplate.New("Flamego.Template").Delims(delmis.Left, delmis.Right)
+	for _, f := range fs.Files() {
 		t := tpl.New(f.Name())
-		for _, funcMap := range opts.FuncMaps {
+		for _, funcMap := range funcMaps {
 			t.Funcs(funcMap)
 		}
 
-		data, err := f.Data()
-		if err != nil {
-			return nil, errors.Wrapf(err, "get data of %q", f.Name())
+		var err error
+		var data []byte
+
+		// Loop over append directories and break out once found.
+		for _, dir := range dirs {
+			fpath := filepath.Join(dir, f.Name()+f.Ext())
+			if !isFile(fpath) {
+				continue
+			}
+
+			data, err = os.ReadFile(fpath)
+			if err != nil {
+				return nil, errors.Wrap(err, "read")
+			}
+			break
 		}
+
+		if len(data) == 0 {
+			data, err = f.Data()
+			if err != nil {
+				return nil, errors.Wrapf(err, "get data of %q", f.Name())
+			}
+		}
+
 		_, err = t.Parse(string(data))
 		if err != nil {
 			return nil, errors.Wrapf(err, "parse %q", f.Name())
@@ -144,8 +181,9 @@ func newTemplate(opts Options) (*gotemplate.Template, error) {
 // template.Data into the request context, which are used for rendering
 // templates to the ResponseWriter.
 //
-// When running with flamego.EnvTypeDev and no FileSystem is specified,
-// templates will be recompiled upon every request.
+// When running with flamego.EnvTypeDev, if either Directory or
+// AppendDirectories is specified, templates will be recompiled upon every
+// request.
 func Templater(opts ...Options) flamego.Handler {
 	var opt Options
 	if len(opts) > 0 {
@@ -153,6 +191,10 @@ func Templater(opts ...Options) flamego.Handler {
 	}
 
 	parseOptions := func(opts Options) Options {
+		if opts.Directory == "" {
+			opts.Directory = "templates"
+		}
+
 		if len(opts.Extensions) == 0 {
 			opts.Extensions = []string{".tmpl", ".html"}
 		}
@@ -165,9 +207,9 @@ func Templater(opts ...Options) flamego.Handler {
 
 	opt = parseOptions(opt)
 
-	tpl, err := newTemplate(opt)
+	tpl, err := newTemplate(opt.Extensions, opt.FuncMaps, opt.Delims, opt.FileSystem, opt.Directory, opt.AppendDirectories...)
 	if err != nil {
-		panic("template: " + err.Error())
+		panic("template: new template: " + err.Error())
 	}
 
 	bufPool := &sync.Pool{
@@ -184,8 +226,9 @@ func Templater(opts ...Options) flamego.Handler {
 			bufPool:        bufPool,
 		}
 
-		if flamego.Env() == flamego.EnvTypeDev && opt.FileSystem == nil {
-			tpl, err := newTemplate(opt)
+		if flamego.Env() == flamego.EnvTypeDev &&
+			(opt.Directory != "" || len(opt.AppendDirectories) > 0) {
+			tpl, err := newTemplate(opt.Extensions, opt.FuncMaps, opt.Delims, opt.FileSystem, opt.Directory, opt.AppendDirectories...)
 			if err != nil {
 				http.Error(
 					c.ResponseWriter(),

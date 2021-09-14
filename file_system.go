@@ -77,62 +77,27 @@ func getExt(name string) string {
 }
 
 // newFileSystem constructs and returns a FileSystem from local disk.
-func newFileSystem(primaryDir string, appendDirs, allowedExtensions []string) (FileSystem, error) {
-	// Directories are composed in the reverse order because later ones overwrites
-	// previous ones. Therefore, we can simply break of the loop once found an
-	// overwrite when looping in the reverse order.
-	dirs := make([]string, 0, len(appendDirs)+1)
-	for i := len(appendDirs) - 1; i >= 0; i-- {
-		dirs = append(dirs, appendDirs[i])
-	}
-	dirs = append(dirs, primaryDir)
-
-	var err error
-	for i := range dirs {
-		if !isDir(dirs[i]) {
-			continue
-		}
-
-		dirs[i], err = filepath.EvalSymlinks(dirs[i])
-		if err != nil {
-			return nil, errors.Wrapf(err, "eval symlinks for %q", dirs[i])
-		}
-	}
-
-	// Walk the primary directory because it is non-sense to load templates not even
-	// exist in the primary directory.
+func newFileSystem(dir string, allowedExtensions []string) (FileSystem, error) {
 	var files []File
-	err = filepath.WalkDir(primaryDir, func(path string, _ fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, _ fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		relpath, err := filepath.Rel(primaryDir, path)
-		if err != nil {
-			return errors.Wrap(err, "get relative path")
-		}
-
-		ext := getExt(relpath)
+		ext := getExt(path)
 		for _, allowed := range allowedExtensions {
 			if ext != allowed {
 				continue
 			}
 
-			// Loop over append directories and break out once found. The file is guaranteed
-			// to exist because otherwise the code won't be executed, and read file from the
-			// primary directory is the ultimate fallback.
-			var data []byte
-			for _, dir := range dirs {
-				fpath := filepath.Join(dir, relpath)
-				if !isFile(fpath) {
-					continue
-				}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return errors.Wrap(err, "read")
+			}
 
-				data, err = os.ReadFile(fpath)
-				if err != nil {
-					return errors.Wrap(err, "read")
-				}
-				break
+			relpath, err := filepath.Rel(dir, path)
+			if err != nil {
+				return errors.Wrap(err, "get relative path")
 			}
 
 			name := filepath.ToSlash(relpath[:len(relpath)-len(ext)])
@@ -143,12 +108,12 @@ func newFileSystem(primaryDir string, appendDirs, allowedExtensions []string) (F
 					ext:  ext,
 				},
 			)
+			break
 		}
-
 		return nil
 	})
 	if err != nil {
-		return nil, errors.Wrapf(err, "walk %q", primaryDir)
+		return nil, errors.Wrapf(err, "walk %q", dir)
 	}
 	return &fileSystem{
 		files: files,
