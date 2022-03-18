@@ -26,7 +26,7 @@ The minimum requirement of Go is **1.16**.
 package main
 
 import (
-	"http"
+	"net/http"
 
 	"github.com/flamego/flamego"
 	"github.com/flamego/template"
