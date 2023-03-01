@@ -8,13 +8,13 @@ import (
 	"bytes"
 	"fmt"
 	gotemplate "html/template"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/log"
 	"github.com/pkg/errors"
 
 	"github.com/flamego/flamego"
@@ -30,7 +30,7 @@ var _ Template = (*template)(nil)
 
 type template struct {
 	responseWriter flamego.ResponseWriter
-	logger         *log.Logger
+	logger         log.Logger
 
 	*gotemplate.Template
 	Data
@@ -70,7 +70,7 @@ func (t *template) HTML(status int, name string) {
 
 	_, err = buf.WriteTo(t.responseWriter)
 	if err != nil {
-		t.logger.Printf("template: failed to write out rendered HTML: %v", err)
+		t.logger.Error("[template] Failed to write out rendered HTML", "error", err)
 		return
 	}
 }
@@ -216,10 +216,10 @@ func Templater(opts ...Options) flamego.Handler {
 		New: func() interface{} { return new(bytes.Buffer) },
 	}
 
-	return flamego.LoggerInvoker(func(c flamego.Context, log *log.Logger) {
+	return flamego.LoggerInvoker(func(c flamego.Context, logger log.Logger) {
 		t := &template{
 			responseWriter: c.ResponseWriter(),
-			logger:         log,
+			logger:         logger,
 			Template:       tpl,
 			Data:           make(Data),
 			contentType:    opt.ContentType,
