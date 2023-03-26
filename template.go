@@ -30,7 +30,7 @@ var _ Template = (*template)(nil)
 
 type template struct {
 	responseWriter flamego.ResponseWriter
-	logger         log.Logger
+	logger         *log.Logger
 
 	*gotemplate.Template
 	Data
@@ -216,7 +216,7 @@ func Templater(opts ...Options) flamego.Handler {
 		New: func() interface{} { return new(bytes.Buffer) },
 	}
 
-	return flamego.LoggerInvoker(func(c flamego.Context, logger log.Logger) {
+	return flamego.LoggerInvoker(func(c flamego.Context, logger *log.Logger) {
 		t := &template{
 			responseWriter: c.ResponseWriter(),
 			logger:         logger,
