@@ -39,7 +39,8 @@ type template struct {
 	bufPool     *sync.Pool
 }
 
-func responseServerError(w http.ResponseWriter, err error) {
+func (t *template) responseServerError(w http.ResponseWriter, err error) {
+	t.logger.Error("rendering", "error", err)
 	if flamego.Env() == flamego.EnvTypeDev {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
@@ -61,7 +62,7 @@ func (t *template) HTML(status int, name string) {
 
 	err := t.ExecuteTemplate(buf, name, t.Data)
 	if err != nil {
-		responseServerError(t.responseWriter, err)
+		t.responseServerError(t.responseWriter, err)
 		return
 	}
 
@@ -219,7 +220,7 @@ func Templater(opts ...Options) flamego.Handler {
 	return flamego.LoggerInvoker(func(c flamego.Context, logger *log.Logger) {
 		t := &template{
 			responseWriter: c.ResponseWriter(),
-			logger:         logger,
+			logger:         logger.WithPrefix("template"),
 			Template:       tpl,
 			Data:           make(Data),
 			contentType:    opt.ContentType,
