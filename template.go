@@ -77,7 +77,7 @@ func (t *template) HTML(status int, name string) {
 }
 
 // Data is used as the root object for rendering a template.
-type Data map[string]interface{}
+type Data map[string]any
 
 // Delims is a pair of Left and Right delimiters for rendering HTML templates.
 type Delims struct {
@@ -214,7 +214,7 @@ func Templater(opts ...Options) flamego.Handler {
 	}
 
 	bufPool := &sync.Pool{
-		New: func() interface{} { return new(bytes.Buffer) },
+		New: func() any { return new(bytes.Buffer) },
 	}
 
 	return flamego.LoggerInvoker(func(c flamego.Context, logger *log.Logger) {
